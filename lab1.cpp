@@ -34,9 +34,13 @@
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <GL/glx.h>
+#include <GL/glu.h>
+extern "C" {
+	#include "fonts.h"
+}
 
-#define WINDOW_WIDTH  800
-#define WINDOW_HEIGHT 600
+#define WINDOW_WIDTH  480
+#define WINDOW_HEIGHT 360
 
 #define MAX_PARTICLES 4000
 #define GRAVITY 0.1
@@ -74,17 +78,19 @@ struct Game {
 		n=0;
 		//declare a box shape
 		for(int i=0; i<5; i++) {
-			box[i].width = 100;
-			box[i].height = 10;
-			box[i].center.x = 120 + i*65;
-			box[i].center.y = 500 - i*60;
+			box[i].width = 60;
+			box[i].height = 10.4;
+			box[i].center.x = (72 + i*39);
+			box[i].center.y = (280 - i*36);
 		}
-	       circle.radius = 100.0;
-	       circle.center.x = 600.0;
-	       circle.center.y = 300.0;
+	       circle.radius = 150.0;
+	       circle.center.x = 400.0;
+	       circle.center.y = -60.0;
 	       
 	}
 };
+
+int fountain = 0;
 
 //Function prototypes
 void initXWindows(void);
@@ -94,7 +100,7 @@ void check_mouse(XEvent *e, Game *game);
 int check_keys(XEvent *e, Game *game);
 void movement(Game *game);
 void render(Game *game);
-
+void text(Game *game);
 
 int main(void)
 {
@@ -125,7 +131,7 @@ void set_title(void)
 {
 	//Set the window title bar.
 	XMapWindow(dpy, win);
-	XStoreName(dpy, win, "335 Lab1   LMB for particle");
+	XStoreName(dpy, win, "335 Lab1   'b' to start fountain");
 }
 
 void cleanupXWindows(void) {
@@ -174,6 +180,8 @@ void init_opengl(void)
 	glOrtho(0, WINDOW_WIDTH, 0, WINDOW_HEIGHT, -1, 1);
 	//Set the screen background color
 	glClearColor(0.1, 0.1, 0.1, 1.0);
+	glEnable(GL_TEXTURE_2D);
+	initialize_fonts();
 }
 
 #define rnd() (float)rand() / (float)RAND_MAX    //returns a random value between 0 and 1
@@ -185,8 +193,8 @@ void makeParticle(Game *game, int x, int y) {
 	Particle *p = &game->particle[game->n];
 	p->s.center.x = x;
 	p->s.center.y = y;
-	p->velocity.y = rnd() - 0.5;
-	p->velocity.x = rnd() - 0.5;
+	p->velocity.y = (rnd() - 0.5) /2;
+	p->velocity.x = (rnd() - 0.5) /2;
 	game->n++;
 }
 
@@ -194,7 +202,7 @@ void check_mouse(XEvent *e, Game *game)
 {
 	static int savex = 0;
 	static int savey = 0;
-	static int n = 0;
+	//static int n = 0;
 
 	if (e->type == ButtonRelease) {
 		return;
@@ -202,11 +210,11 @@ void check_mouse(XEvent *e, Game *game)
 	if (e->type == ButtonPress) {
 		if (e->xbutton.button==1) {
 			//Left button was pressed
-			int y = WINDOW_HEIGHT - e->xbutton.y;
+			/*int y = WINDOW_HEIGHT - e->xbutton.y;
 			for (int i = 0; i<10; i++){
 			    makeParticle(game, e->xbutton.x, y);
 			}
-			    return;
+			    return;*/
 		}
 		if (e->xbutton.button==3) {
 			//Right button was pressed
@@ -217,12 +225,12 @@ void check_mouse(XEvent *e, Game *game)
 	if (savex != e->xbutton.x || savey != e->xbutton.y) {
 		savex = e->xbutton.x;
 		savey = e->xbutton.y;
-		if (++n < 10)
+		/*if (++n < 10)
 			return;
 		int y = WINDOW_HEIGHT - e->xbutton.y;
 		for (int i = 0; i<10; i++){
 		    makeParticle(game, e->xbutton.x, y);
-		}
+		}*/
 	}
 }
 
@@ -232,9 +240,16 @@ int check_keys(XEvent *e, Game *game)
 	if (e->type == KeyPress) {
 		int key = XLookupKeysym(&e->xkey, 0);
 		if (key == XK_Escape) {
+			cleanup_fonts();
 			return 1;
 		}
 		//You may check other keys here.
+		if (key == XK_b) {
+			if(fountain) 
+				fountain = 0;
+			else
+				fountain = 1;
+		}
 
 	}
 	return 0;
@@ -263,7 +278,8 @@ void movement(Game *game)
 			    ) {
 		    		//collision with box
 				p->s.center.y = game->box[j].center.y + game->box[j].height +0.1;
-			    	p->velocity.y *= rnd() * -0.5;
+				p->velocity.y *= rnd() * -0.5;
+			    	p->velocity.x += rnd() * 0.05;
 	        	}
 		}
 
@@ -272,6 +288,8 @@ void movement(Game *game)
 		d1 = p->s.center.y - game->circle.center.y;
 		dist = sqrt(d0*d0 + d1*d1);
 		if(dist < game->circle.radius) {
+		    p->s.center.x = game->circle.center.x + d0/dist * game->circle.radius * 1.01;
+		    p->s.center.y = game->circle.center.y + d1/dist * game->circle.radius * 1.01;
 		    //collision--apply penalty to particle
 		    p->velocity.x += d0/dist;
 		    p->velocity.y += d1/dist;
@@ -284,6 +302,46 @@ void movement(Game *game)
 			memcpy(&game->particle[i], &game->particle[game->n-1], sizeof(Particle));
 			game->n--;
 		}
+	}
+}
+
+void text(Game *game) {
+
+	if(fountain){
+		glViewport(0,0,WINDOW_WIDTH,WINDOW_HEIGHT);
+	//	glDepthFunc(GL_LESS);
+	//	glDisable(GL_DEPTH_TEST);
+		glMatrixMode(GL_PROJECTION);
+		glLoadIdentity();
+		glOrtho(0,0,WINDOW_WIDTH,WINDOW_HEIGHT,-1,1);
+		glMatrixMode(GL_MODELVIEW);
+		glLoadIdentity();
+		gluOrtho2D(0,WINDOW_WIDTH,0,WINDOW_HEIGHT);
+		Rect r;	
+		r.bot = 270;
+		r.left = 15;
+		r.center = 0;
+		ggprint16(&r,36,0x00ff0000,"Requirements");
+		Rect r2;	
+		r2.bot = 234;
+		r2.left = 82;
+		r2.center = 0;
+		ggprint16(&r2,36,0x00ffe800,"Design");
+		Rect r3;	
+		r3.bot = 198;
+		r3.left = 120;
+		r3.center = 0;
+		ggprint16(&r3,36,0x003867f5,"Coding");
+		Rect r4;	
+		r4.bot = WINDOW_HEIGHT/2 - 18;
+		r4.left = WINDOW_WIDTH/2 - 85;
+		r4.center = 0;
+		ggprint16(&r4,36,0x00000000,"Testing");
+		Rect r5;
+		r5.bot = WINDOW_HEIGHT/2 - 55 ;
+		r5.left = WINDOW_WIDTH/2 - 64;
+		r5.center = 0;
+		ggprint16(&r5,36,0x00cdc2c2,"Maintenance");
 	}
 }
 
@@ -334,6 +392,7 @@ void render(Game *game)
 	
 	glPopMatrix();
         }
+	
 	//draw all particles here
 	glPushMatrix();
 	glColor3ub(150,160,220);
@@ -348,6 +407,16 @@ void render(Game *game)
 		glVertex2i(c->x+w, c->y-h);
 		glEnd();
 	}
+	
+	if(fountain) {
+		int x = 72;
+		int y = 330;
+		for (int i = 0; i<10; i++){
+			makeParticle(game, x, y);
+		}
+	}
+
+	text(game);
 	glPopMatrix();
 }
 
